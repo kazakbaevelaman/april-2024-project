@@ -1,0 +1,65 @@
+- name: Create a user prometheus
+  ansible.builtin.user:
+    name: prometheus
+    create_home: no
+    shell: /bin/false
+    system: true
+
+- name: Download prometheus
+  ansible.builtin.get_url:
+    url: https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz
+    dest: /tmp/prometheus.tar.gz
+
+- name: Unarchive a file that is already on the remote machine
+  ansible.builtin.unarchive:
+    src: /tmp/prometheus.tar.gz
+    dest: /tmp
+    remote_src: yes
+
+- name: Create directories 
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: prometheus
+    group: prometheus
+    state: directory
+  loop:
+    - /data
+    - /etc/prometheus
+
+
+- name: Copy file with owner and permissions
+  ansible.builtin.copy:
+    src: /tmp/prometheus-2.45.0.linux-amd64/{{ item }}
+    dest: /usr/local/bin
+    mode: '0755'
+    remote_src: yes
+  loop:
+    - prometheus
+    - promtool
+
+- name: Copy file with owner and permissions
+  ansible.builtin.copy:
+    src: /tmp/prometheus-2.45.0.linux-amd64/{{ item }}
+    dest: /etc/prometheus
+    owner: prometheus
+    group: prometheus
+    remote_src: yes
+  loop:
+    - consoles
+    - console_libraries
+    - prometheus.yml
+
+- name: Template a file to /etc/systemd/system
+  ansible.builtin.template:
+    src: roles/prometheus/templates/prometheus.service.j2
+    dest: /etc/systemd/system/prometheus.service
+
+- name: Make sure a service unit is running
+  ansible.builtin.systemd:
+    state: started
+    name: prometheus
+    enabled: yes
+  retries: 3
+  delay: 10
+  register: result
+  until: result is succeeded

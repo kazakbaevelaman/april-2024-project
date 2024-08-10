@@ -1,0 +1,49 @@
+- name: Add the user node_exporter
+  ansible.builtin.user:
+    name: node_exporter
+    shell: /bin/false
+    system: true
+    create_home: false
+
+- name: Download node exporter
+  ansible.builtin.get_url:
+    url: https://github.com/prometheus/node_exporter/releases/download/v1.6.1/node_exporter-1.6.1.linux-amd64.tar.gz
+    dest: /tmp/node.tar.gz
+
+- name: Unarchive a file that is already on the remote machine
+  ansible.builtin.unarchive:
+    src: /tmp/node.tar.gz
+    dest: /tmp
+    remote_src: yes
+
+- name: Copy binaries
+  ansible.builtin.copy:
+    src: /tmp/node_exporter-1.6.1.linux-amd64/node_exporter
+    dest: /usr/local/bin/
+    mode: '0755'
+    remote_src: yes
+
+- name: Template a file to /etc/file.conf
+  ansible.builtin.template:
+    src: roles/node-exporter/templates/node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+
+- name: Make sure a service unit is running
+  ansible.builtin.systemd:
+    state: started
+    name: node_exporter
+    enabled: yes
+
+- name: Insert block
+  ansible.builtin.blockinfile:
+    path: /etc/prometheus/prometheus.yml
+    block: |
+      - job_name: 'node_export'
+          static_configs:
+            - targets: ["localhost:9100"]
+
+- name: Fix indentation
+  ansible.builtin.replace:
+    path: /etc/prometheus/prometheus.yml
+    regexp: "^(- job_name: 'node_export')"
+    replace: '  \1'
